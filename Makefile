@@ -6,3 +6,5 @@ reqdata: reqdata.o
 
 clean:
 	rm *.o reqdata fuzzreply
+
+install:
