@@ -3,7 +3,7 @@
 To perform the needed reverse engineering tasks, I made these two tools:
 
 * reqdata
-Sends a capture data-request package, tries to recalculate CRC and warns if
+Sends a captured data-request package, tries to recalculate CRC and warns if
 it doesn't match the reference (good to test if the CRC calculation works).
 
 * fuzzreply [bit-to-flip]
@@ -23,8 +23,8 @@ the hardware to have a guess ;)
 I used them in combination with socat, in order to get a status from the
 controller you can run:
 
-  stty -F /dev/ttyUSB0 9600 raw
-  ./reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | hexdump -C
+    stty -F /dev/ttyUSB0 9600 raw
+    ./reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | hexdump -C
 
 
 I also included some communication traces, so there is lots of sample material.
