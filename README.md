@@ -1,4 +1,4 @@
-= Tracer solar charger probing/fuzzing =
+# Tracer solar charger probing/fuzzing #
 
 To perform the needed reverse engineering tasks, I made these two tools:
 
@@ -25,7 +25,6 @@ controller you can run:
 
     stty -F /dev/ttyUSB0 9600 raw
     ./reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | hexdump -C
-
 
 I also included some communication traces, so there is lots of sample material.
 
