@@ -26,7 +26,11 @@ controller you can run:
     stty -F /dev/ttyUSB0 9600 raw
     reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | parsereply
 
-I also included some communication traces, so there is lots of sample material.
+The parsereply tool also accepts parameters -c for CSV output and -o for a
+human-readable one-liner (e.g. for use with syslog).
+
+I also included some communication traces, so there is lots of sample material
+with valid CRCs which should allow to find the CRC method used.
 
 
 Thanks and have fun!
