@@ -29,7 +29,10 @@ Tracer MPPT solar controller:
       reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 > "$tmpfile"
       parsereply < "$tmpfile"
       parsereply -o < "$tmpfile" | logger
-      parsereply -c < "$tmpfile" | alfred -s 160
+      (
+        echo -n "'$(uname -n)', '$(date)', "
+        parsereply -c < "$tmpfile"
+      ) | alfred -s 160
       rm "$tmpfile"
     fi
 
