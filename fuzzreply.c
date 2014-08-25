@@ -1,5 +1,16 @@
 #include "crc16.h"
-/* output captured reply, optionally flip a bit given by parameter */
+/*
+ * fuzzreply tool - 0.8
+ * output captured reply, optionally flip a bit given by a parameter
+ *
+ * Copyright (C) 2014 Daniel Golle <daniel@makrotopia.org>
+ *
+ *      This program is free software; you can redistribute it and/or
+ *      modify it under the terms of the GNU General Public License as
+ *      published by the Free Software Foundation, version 3.
+ *
+ */
+
 
 /* a captured reply */
 uint8_t reply[36] = { 0xeb, 0x90, 0xeb, 0x90, 0xeb, 0x90, /* sync */

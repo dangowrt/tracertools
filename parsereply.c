@@ -1,6 +1,17 @@
+/*
+ * parsereply tool - 0.8
+ * converts a reply to meaningful output formats
+ *
+ * Copyright (C) 2014 Daniel Golle <daniel@makrotopia.org>
+ *
+ *      This program is free software; you can redistribute it and/or
+ *      modify it under the terms of the GNU General Public License as
+ *      published by the Free Software Foundation, version 3.
+ *
+ */
+
 #include "crc16.h"
 #include <endian.h>
-/* convert a reply to meaningful output */
 
 #define CHG_FLAG_0 1
 #define CHG_FLAG_1 2
@@ -28,9 +39,7 @@ typedef struct reply {
 	uint8_t		b4;
 	uint16_t	crc;
 	uint8_t		term;
-	uint32_t	_pad1;
-	uint32_t	_pad2;
-	uint32_t	_pad3;
+	uint32_t	_pad[7];
 }__attribute__((packed)) reply_t;
 
 /* { 0xeb, 0x90, 0xeb, 0x90, 0xeb, 0x90, */		/* sync */
@@ -63,7 +72,7 @@ int main(int args, char *argv[])
 	if (args == 2 && strncmp(argv[1], "-o", 3) == 0)
 		oneline = 1;
 
-	if (fread(&r, 1, 37, stdin) < 36)
+	if (fread(&r, 1, 64, stdin) < 36)
 		return -1; /* EOPEN */
 
 	for(n=0;n<3;n++) {
