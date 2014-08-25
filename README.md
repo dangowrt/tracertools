@@ -20,11 +20,18 @@ results, changing and compiling these tools can allow users without access to
 the hardware to have a guess ;)
 
 
-I used them in combination with socat, in order to get a status from the
-controller you can run:
+I use these tools in combination with socat to collect the status of a
+Tracer MPPT solar controller:
 
-    stty -F /dev/ttyUSB0 9600 raw
-    reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | parsereply
+    tmpfile="$( mktemp )"
+    if [ -e "$tmpfile" ]; then
+      stty -F /dev/ttyUSB0 9600 raw
+      reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 > "$tmpfile"
+      parsereply < "$tmpfile"
+      parsereply -o < "$tmpfile" | logger
+      parsereply -c < "$tmpfile" | alfred -s 160
+      rm "$tmpfile"
+    fi
 
 The parsereply tool also accepts parameters -c for CSV output and -o for a
 human-readable one-liner (e.g. for use with syslog).
