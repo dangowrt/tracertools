@@ -1,6 +1,8 @@
-all: fuzzreply reqdata
+all: fuzzreply parsereply reqdata
 
 fuzzreply: fuzzreply.o
+
+parsereply: parsereply.o
 
 reqdata: reqdata.o
 

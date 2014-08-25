@@ -24,7 +24,7 @@ I used them in combination with socat, in order to get a status from the
 controller you can run:
 
     stty -F /dev/ttyUSB0 9600 raw
-    ./reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | hexdump -C
+    reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | parsereply
 
 I also included some communication traces, so there is lots of sample material.
 
