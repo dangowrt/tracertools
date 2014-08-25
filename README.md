@@ -2,17 +2,21 @@
 
 To perform the needed reverse engineering tasks, I made these two tools:
 
-* reqdata
-Sends a captured data-request package, tries to recalculate CRC and warns if
-it doesn't match the reference (good to test if the CRC calculation works).
+* `reqdata` sends a captured data-request package, tries to recalculate CRC
+and warns if it doesn't match the reference (good to test if the CRC
+calculation works).
 
-* fuzzreply [bit-to-flip]
-Sends a captured reply package, optionally flips a bit and tries to
-recalculate the CRC.
+* `parsereply` converts a captured reply package and to various useful output
+formats.
 
-Both currently use the CRC-16 implementation I copy-pasted from libmodbus...
+* `fuzzreply [bit-to-flip]` sends a captured reply package, optionally flips a
+bit and tries to recalculate the CRC.
+
+The tools currently use the CRC-16 implementation I copy-pasted from
+libmodbus...
 This is obviously not entirely correct, so the right CRC calculation details
 need to be found.
+
 You can help by trying to fix crc16.h (and maybe reqdata.c to change offsets
 and/or length of the CRC calculation input).
 As currently the CRC calculation does not lead to the intended (sniffed)
