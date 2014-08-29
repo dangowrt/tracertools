@@ -6,7 +6,7 @@ To perform the needed reverse engineering tasks, I made these two tools:
 and warns if it doesn't match the reference (good to test if the CRC
 calculation works).
 
-* `parsereply` converts a captured reply package and to various useful output
+* `parsereply` converts a captured reply package to various useful output
 formats.
 
 * `fuzzreply [bit-to-flip]` sends a captured reply package, optionally flips a
