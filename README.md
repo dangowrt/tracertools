@@ -23,6 +23,11 @@ As currently the CRC calculation does not lead to the intended (sniffed)
 results, changing and compiling these tools can allow users without access to
 the hardware to have a guess ;)
 
+To query the status of your controller and output the result you can use socat
+and stty from coreutils to set the baudrate.
+
+    stty -F /dev/ttyUSB0 9600 raw
+    reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | parsereply
 
 I use these tools in combination with socat to collect the status of a
 Tracer MPPT solar controller:
