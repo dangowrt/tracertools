@@ -117,10 +117,10 @@ int main(int args, char *argv[])
 			(r.chgflags & CHG_FLAG_2)>>2);
 		printf("%d, %d, %d, %d, ", v1, v2, v3, v4);
 		printf("0x%02x, 0x%02x, 0x%02x, 0x%02x, ", r.b1, r.b2, r.b3, r.b4);
-		printf("0x%02x, 0x%02, 0x%02x, 0x%02x\n", r.b5, r.b6, r.b7, r.b8);
+		printf("0x%02x, 0x%02x, 0x%02x, 0x%02x\n", r.b5, r.b6, r.b7, r.b8);
 	} else if (oneline) {
 		printf("battery: %.2f V; ", batv);
-		printf("panel: %.2f V * ", panv);
+		printf("panel: %.2f V; ", panv);
 		printf("load (%s): %.2f A; ", r.loadon?"on":"off", loadc);
 		printf("charge mode %x\n", r.chgflags);
 	} else {
