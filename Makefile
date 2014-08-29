@@ -7,6 +7,6 @@ parsereply: parsereply.o
 reqdata: reqdata.o
 
 clean:
-	rm *.o reqdata fuzzreply
+	rm *.o reqdata parsereply fuzzreply
 
 install:
