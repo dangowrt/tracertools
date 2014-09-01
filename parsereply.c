@@ -111,7 +111,7 @@ int main(int args, char *argv[])
 	v4 = le16toh(r.v4);
 
 	if (csvout) {
-		printf("%.2f, %.2f, %.2f, %.2f, ", batv, panv, loadc);
+		printf("%.2f, %.2f, %.2f, ", batv, panv, loadc);
 		printf("%d, %d, %d, %d, ", r.loadon, r.chgflags & CHG_FLAG_0,
 			(r.chgflags & CHG_FLAG_1)>>1,
 			(r.chgflags & CHG_FLAG_2)>>2);
