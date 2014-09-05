@@ -1,10 +1,11 @@
-all: parsereply reqdata
+all: parsereply genreq
 
 parsereply: parsereply.o
 
-reqdata: reqdata.o
+genreq:
+	ln -s parsereply genreq
 
 clean:
-	rm *.o reqdata parsereply
+	rm *.o parsereply genreq
 
 install:

@@ -12,10 +12,37 @@
 
 #include "tracer_crc16.h"
 #include <endian.h>
+#include <string.h>
+#include <libgen.h>
 
-#define CHG_FLAG_0 1
-#define CHG_FLAG_1 2
-#define CHG_FLAG_2 4
+uint8_t req[13] = { 0xeb, 0x90, 0xeb, 0x90, 0xeb, 0x90, /* sync */
+			0x01, 0xa0, 0x01, /* head: address, function, length */
+			0x03,		  /* data */
+			0, 0,		  /* crc */
+			0x7f };		  /* term */
+
+int main_genreq(int args, char *argv[])
+{
+	unsigned int i;
+	uint16_t crc_h, crc;
+
+	if (args == 2) {
+		req[7] = 0xaa;
+		req[9] = atoi(argv[1]);
+	}
+
+	crc_h = tracer_crc16(&(req[6]), req[8]+5);
+	crc = htobe16(crc_h);
+
+	req[11] = (uint8_t)(crc & (uint16_t)0x00ff);
+	req[10] = (uint8_t)(crc>>8 & (uint16_t)0x00ff);
+
+	for(i=0;i<13;i++) {
+		putc(req[i], stdout);
+	}
+	return 0;
+}
+
 
 typedef struct reply {
 	uint16_t	sync[3];
@@ -56,7 +83,7 @@ typedef struct reply {
 /*		       0x7f  }; */			/* term */
 
 
-int main(int args, char *argv[])
+int main_parsereply(int args, char *argv[])
 {
 	uint8_t n;
 	reply_t r;
@@ -156,4 +183,17 @@ int main(int args, char *argv[])
 
 	}
 	return 0;
+}
+
+int main(int args, char *argv[]) {
+	char *cmd;
+
+	cmd = basename(argv[0]);
+
+	if (!strcmp(cmd, "genreq") || !strcmp(cmd, "reqdata"))
+		return main_genreq(args, argv);
+	else if (!strcmp(cmd, "parsereply"))
+		return main_parsereply(args, argv);
+	else
+		return -1;
 }

@@ -1,4 +1,3 @@
-fuzzreply
 parsereply
-reqdata
+genreq
 *.o

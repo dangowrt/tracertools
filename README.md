@@ -9,18 +9,18 @@ something not entirely unlike a datasheet.
 
 Beware! This is hacky and crude prototype-quality software.
 
-* `reqdata` sends a captured data-request package, tries to recalculate CRC
-and warns if it doesn't match the reference (good to test if the CRC
-calculation works).
+* `genreq` generate a request package. if called with a parameter, the load
+output is switched according to the parameter. if called without a parameter,
+a status-request is generated.
 
-* `parsereply` converts a captured reply package to various useful output
-formats.
+* `parsereply` converts a captured status reply package to various useful
+output formats.
 
 To query the status of your controller and output the result you can use socat
 and stty from coreutils to set the baudrate.
 
     stty -F /dev/ttyUSB0 9600 raw
-    reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | parsereply
+    genreq | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | parsereply
 
 I use these tools in combination with socat to collect the status of a
 Tracer MPPT solar controller:
@@ -28,7 +28,7 @@ Tracer MPPT solar controller:
     tmpfile="$( mktemp )"
     if [ -e "$tmpfile" ]; then
       stty -F /dev/ttyUSB0 9600 raw
-      reqdata | socat - /dev/ttyUSB0,nonblock,raw,echo=0 > "$tmpfile"
+      genreq | socat - /dev/ttyUSB0,nonblock,raw,echo=0 > "$tmpfile"
       parsereply < "$tmpfile"
       parsereply -o < "$tmpfile" | logger
       (
