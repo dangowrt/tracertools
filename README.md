@@ -1,20 +1,28 @@
 # Tracer solar charger probing/fuzzing #
 
-To perform the needed reverse engineering tasks, I made these two tools.
+This project intially started by reverse engineering the communication protocol
+of the Tracer solar charge controller.
 
-Fortunately EP Solar hinted to look at the `Tracer-MT-5 protocol (111213).doc`
-file and searching for that I found https://github.com/xxv/tracer/
+Fortunately [EP Solar](http://www.epsolarpv.com/) hinted to look at the
+`Tracer-MT-5 protocol (111213).doc`
+file and searching for that I found a Python and Arduino library for the
+[Communication Interface for Tracer MT-5](https://github.com/xxv/tracer/).
 Great to see there is more people hacking these controllers! And even got
-something not entirely unlike a datasheet.
+something not entirely unlike a
+[datasheet](https://github.com/xxv/tracer/blob/42e32a0e757e529d196cc04b29148ed4f442125e/docs/Protocol-Tracer-MT-5.pdf)
 
-Beware! This is hacky and crude prototype-quality software.
+I made these two tools, initially meant to probe/fuzz and experiment with
+captured communication logs. Now they are already useful to output the
+status information of the Tracer and switch the load power on/off.
 
 * `genreq` generate a request package. if called with a parameter, the load
-output is switched according to the parameter. if called without a parameter,
-a status-request is generated.
+output is switched according to the parameter (0/1). if called without a
+parameter, a status-request is generated.
 
 * `parsereply` converts a captured status reply package to various useful
 output formats.
+
+Beware! This is hacky and crude prototype-quality software.
 
 To query the status of your controller and output the result you can use socat
 and stty from coreutils to set the baudrate.
