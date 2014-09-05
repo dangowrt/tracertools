@@ -91,7 +91,7 @@ int parsereply(int args, char *argv[])
 	uint8_t n,s;
 	reply_t *r;
 	uint8_t csvout = 0, oneline = 0;
-	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl;
+	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
 	int8_t temp;
 	uint8_t buf[64];
 
@@ -168,6 +168,7 @@ int parsereply(int args, char *argv[])
 
 	flowc = pvc - loadc;
 	batl = ( 100 * ( batv - minv ) ) / ( maxv - minv );
+	batf = ( r->batfull ? ((flowc>0)?0:flowc) : flowc ) * batv;
 
 	if (csvout) {
 		printf("%.2f, %.2f, %.2f, %.2f, ", batv, panv, pvc, loadc);
@@ -177,7 +178,7 @@ int parsereply(int args, char *argv[])
 		printf("0x%02x, 0x%02x \n", r->b1, r->b2);
 	} else if (oneline) {
 		printf("battery: %.1f%%%s; ", batl, r->batfull?" (full)":"");
-		printf("load: %s; flow: %+.2f W; ", r->loadon?"on":"off", flowc * batv);
+		printf("load: %s; flow: %+.2f W; ", r->loadon?"on":"off", batf);
 		printf("t: %d degC; ", temp);
 		printf("%s%s%s%s\n", r->overload?" overload!":"",
 			r->fuse?" short-circuit!":"",
@@ -189,11 +190,13 @@ int parsereply(int args, char *argv[])
 		printf("pwm current: %.2f A\n", pvc);
 		printf("load power is %s\n", r->loadon?"on":"off");
 		printf("load current: %.2f A\n", loadc);
-		printf("flow: %+.2f W\n", flowc * batv);
+		printf("battery flow: %+.2f W\n", batf);
 		printf("battery level: %.1f%%\n", batl);
 		printf("temperature: %d deg C\n", temp);
 		printf("alarms:");
-		printf("%s%s%s%s%s", r->overload?" overload!":"",
+		printf("%s%s%s%s%s%s",
+			r->batfull?" battery full.":"",
+			r->overload?" overload!":"",
 			r->fuse?" short-circuit!":"",
 			r->batoverload?" battery overload!":"",
 			r->overdischarge?" over discharge!":"",
