@@ -107,7 +107,7 @@ int parsereply(int args, char *argv[])
 	if (args == 2 && strncmp(argv[1], "-o", 3) == 0)
 		oneline = 1;
 
-	if (fread(buf, 1, sizeof(buf), stdin) < sizeof(reply_t) + 2)
+	if (fread(buf, 1, sizeof(buf), stdin) < 12)
 		return -1; /* EOPEN */
 
 	/* sync-match */
@@ -131,6 +131,27 @@ int parsereply(int args, char *argv[])
 	if (r->addr != 0)
 		return -3; /* EINVAL */
 
+	if (r->length > 24)
+		return -3;
+
+	crc = tracer_crc16(&(r->addr), r->length + 5);
+	if (crc) {
+		fprintf(stderr, "crc error");
+		return -2;
+	}
+
+	if (r->function == 170) {
+		if (csvout) {
+			printf("%d", buf[n+3]);
+		} else {
+			printf("load power switched %s", buf[n+3]?"on":"off");
+			if (!oneline)
+				printf("\n");
+		}
+
+		return 0;
+	}
+
 	if (r->function != 160)
 		return -3; /* EINVAL */
 
@@ -140,11 +161,6 @@ int parsereply(int args, char *argv[])
 	if (r->term != 127)
 		return -2; /* EDATA */
 
-	crc = tracer_crc16(&(r->addr), r->length + 5);
-	if (crc) {
-		fprintf(stderr, "crc error");
-		return -2;
-	}
 
 	batv = le16toh(r->batv);
 	batv /= 100;
@@ -175,7 +191,7 @@ int parsereply(int args, char *argv[])
 		printf("%.2f, %.2f, %d, ", minv, maxv, temp);
 		printf("%d, %d, %d, %d, ", r->loadon, r->charging, r->overload, r->fuse);
 		printf("%d, %d, %d, ", r->overdischarge, r->batfull, r->batoverload);
-		printf("0x%02x, 0x%02x \n", r->b1, r->b2);
+		printf("0x%02x, 0x%02x", r->b1, r->b2);
 	} else if (oneline) {
 		printf("battery: %.1f%%%s; ", batl, r->batfull?" (full)":"");
 		printf("load: %s; flow: %+.2f W; ", r->loadon?"on":"off", batf);
