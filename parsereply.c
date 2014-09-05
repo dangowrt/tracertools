@@ -88,12 +88,11 @@ int main_parsereply(int args, char *argv[])
 	uint8_t n;
 	reply_t r;
 	uint8_t csvout = 0, oneline = 0;
-	double batv, minv, maxv, panv, loadc, panc, pvc;
-
-	uint16_t crc, crc_n;
-	uint8_t length;
-	uint16_t const sync = 0x90eb;
+	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl;
 	int8_t temp;
+
+	uint16_t const sync = 0x90eb;
+	uint16_t crc, crc_n;
 
 	if (args>2)
 		return 1;
@@ -150,6 +149,9 @@ int main_parsereply(int args, char *argv[])
 
 	temp = r.temp - 30;
 
+	flowc = pvc - loadc;
+	batl = ( 100 * ( batv - minv ) ) / ( maxv - minv );
+
 	if (csvout) {
 		printf("%.2f, %.2f, %.2f, %.2f, ", batv, panv, pvc, loadc);
 		printf("%.2f, %.2f, %d, ", minv, maxv, temp);
@@ -157,21 +159,21 @@ int main_parsereply(int args, char *argv[])
 		printf("%d, %d, %d, ", r.overdischarge, r.batfull, r.batoverload);
 		printf("0x%02x, 0x%02x \n", r.b1, r.b2);
 	} else if (oneline) {
-		printf("battery: %.2f V%s; ", batv, r.batfull?" (full)":"");
-		printf("panel: %.2f V; ", panv);
-		printf("%scharging; PV: %.2f A; ", r.charging?"":"not ", pvc);
-		printf("load (%s): %.2f A; ", r.loadon?"on":"off", loadc);
+		printf("battery: %.1f%%%s; ", batl, r.batfull?" (full)":"");
+		printf("load: %s; flow: %+.2f W; ", r.loadon?"on":"off", flowc * batv);
 		printf("t: %d degC; ", temp);
 		printf("%s%s%s%s\n", r.overload?" overload!":"",
 			r.fuse?" short-circuit!":"",
 			r.batoverload?" battery overload!":"",
 			r.overdischarge?" over discharge!":"");
 	} else {
-		printf("battery voltage: %.2f V\n", batv);
 		printf("pv voltage: %.2f V\n", panv);
-		printf("pv current: %.2f A\n", pvc);
+		printf("battery voltage: %.2f V\n", batv);
+		printf("pwm current: %.2f A\n", pvc);
 		printf("load power is %s\n", r.loadon?"on":"off");
 		printf("load current: %.2f A\n", loadc);
+		printf("flow: %+.2f W\n", flowc * batv);
+		printf("battery level: %.1f%%\n", batl);
 		printf("temperature: %d deg C\n", temp);
 		printf("alarms:");
 		printf("%s%s%s%s%s", r.overload?" overload!":"",
