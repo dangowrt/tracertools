@@ -1,6 +1,13 @@
 # Tracer solar charger probing/fuzzing #
 
-To perform the needed reverse engineering tasks, I made these two tools:
+To perform the needed reverse engineering tasks, I made these two tools.
+
+Fortunately EP Solar hinted to look at the `Tracer-MT-5 protocol (111213).doc`
+file and searching for that I found https://github.com/xxv/tracer/
+Great to see there is more people hacking these controllers! And even got
+something not entirely unlike a datasheet.
+
+Beware! This is hacky and crude prototype-quality software.
 
 * `reqdata` sends a captured data-request package, tries to recalculate CRC
 and warns if it doesn't match the reference (good to test if the CRC
@@ -8,20 +15,6 @@ calculation works).
 
 * `parsereply` converts a captured reply package to various useful output
 formats.
-
-* `fuzzreply [bit-to-flip]` sends a captured reply package, optionally flips a
-bit and tries to recalculate the CRC.
-
-The tools currently use the CRC-16 implementation I copy-pasted from
-libmodbus...
-This is obviously not entirely correct, so the right CRC calculation details
-need to be found.
-
-You can help by trying to fix crc16.h (and maybe reqdata.c to change offsets
-and/or length of the CRC calculation input).
-As currently the CRC calculation does not lead to the intended (sniffed)
-results, changing and compiling these tools can allow users without access to
-the hardware to have a guess ;)
 
 To query the status of your controller and output the result you can use socat
 and stty from coreutils to set the baudrate.
