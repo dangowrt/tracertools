@@ -66,6 +66,7 @@ int main(int args, char *argv[])
 	uint16_t crc, crc_n;
 	uint8_t length;
 	uint16_t const sync = 0x90eb;
+	int8_t temp;
 
 	if (args>2)
 		return 1;
@@ -90,7 +91,7 @@ int main(int args, char *argv[])
 	if (r.function != 160)
 		return -3; /* EINVAL */
 
-	if (r.length > sizeof(reply_t) - 12)
+	if (r.length != 24)
 		return -3; /* EINVAL */
 
 	if (r.term != 127)
@@ -120,9 +121,11 @@ int main(int args, char *argv[])
 	pvc = le16toh(r.pvc); /* ok */
 	pvc /= 100;
 
+	temp = r.temp - 30;
+
 	if (csvout) {
 		printf("%.2f, %.2f, %.2f, %.2f, ", batv, panv, pvc, loadc);
-		printf("%.2f, %.2f, %d, ", minv, maxv, r.temp);
+		printf("%.2f, %.2f, %d, ", minv, maxv, temp);
 		printf("%d, %d, %d, %d, ", r.loadon, r.charging, r.overload, r.fuse);
 		printf("%d, %d, %d, ", r.overdischarge, r.batfull, r.batoverload);
 		printf("0x%02x, 0x%02x \n", r.b1, r.b2);
@@ -131,6 +134,7 @@ int main(int args, char *argv[])
 		printf("panel: %.2f V; ", panv);
 		printf("%scharging; PV: %.2f A; ", r.charging?"":"not ", pvc);
 		printf("load (%s): %.2f A; ", r.loadon?"on":"off", loadc);
+		printf("t: %d degC; ", temp);
 		printf("%s%s%s%s\n", r.overload?" overload!":"",
 			r.fuse?" short-circuit!":"",
 			r.batoverload?" battery overload!":"",
@@ -141,7 +145,7 @@ int main(int args, char *argv[])
 		printf("pv current: %.2f A\n", pvc);
 		printf("load power is %s\n", r.loadon?"on":"off");
 		printf("load current: %.2f A\n", loadc);
-		printf("temperature: %d deg C\n", r.temp - 30);
+		printf("temperature: %d deg C\n", temp);
 		printf("alarms:");
 		printf("%s%s%s%s%s", r.overload?" overload!":"",
 			r.fuse?" short-circuit!":"",

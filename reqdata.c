@@ -22,6 +22,11 @@ int main(int args, char *argv[])
 	unsigned int i;
 	uint16_t crc_h, crc;
 
+	if (args == 2) {
+		req[7] = 0xaa;
+		req[9] = atoi(argv[1]);
+	}
+
 	crc_h = tracer_crc16(&(req[6]), req[8]+5);
 	crc = htobe16(crc_h);
 
