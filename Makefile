@@ -1,11 +1,11 @@
-all: parsereply genreq
+all: tracerstat tracerreq
 
-parsereply: parsereply.o
+tracerstat: tracerstat.o
 
-genreq:
-	ln -s parsereply genreq
+tracerreq:
+	ln -s tracerstat tracerreq
 
 clean:
-	rm *.o parsereply genreq
+	rm *.o tracerstat tracerreq
 
 install:

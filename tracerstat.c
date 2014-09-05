@@ -1,6 +1,7 @@
 /*
- * parsereply tool - 0.8
- * converts a reply to meaningful output formats
+ * tracer stat tool - 0.9
+ * converts a status reply to meaningful output formats,
+ * generates status request and load power switch requests.
  *
  * Copyright (C) 2014 Daniel Golle <daniel@makrotopia.org>
  *
@@ -15,37 +16,14 @@
 #include <string.h>
 #include <libgen.h>
 
+/* a captured status request message with the CRC 0'd out */
 uint8_t req[13] = { 0xeb, 0x90, 0xeb, 0x90, 0xeb, 0x90, /* sync */
 			0x01, 0xa0, 0x01, /* head: address, function, length */
 			0x03,		  /* data */
 			0, 0,		  /* crc */
 			0x7f };		  /* term */
 
-int main_genreq(int args, char *argv[])
-{
-	unsigned int i;
-	uint16_t crc_h, crc;
-
-	if (args == 2) {
-		req[7] = 0xaa;
-		req[9] = atoi(argv[1]);
-	}
-
-	crc_h = tracer_crc16(&(req[6]), req[8]+5);
-	crc = htobe16(crc_h);
-
-	req[11] = (uint8_t)(crc & (uint16_t)0x00ff);
-	req[10] = (uint8_t)(crc>>8 & (uint16_t)0x00ff);
-
-	for(i=0;i<13;i++) {
-		putc(req[i], stdout);
-	}
-	return 0;
-}
-
-
 typedef struct reply {
-	uint16_t	sync[3];
 	uint8_t		addr; /* 0 = reply/broadcast */
 	uint8_t		function; /* = 160 */
 	uint8_t		length; /* = 24 */
@@ -68,9 +46,9 @@ typedef struct reply {
 	uint8_t		b2; /* 0 reserved*/
 	uint16_t	crc;
 	uint8_t		term;
-	uint32_t	_pad[7];
 }__attribute__((packed)) reply_t;
 
+/* a captured reply message */
 /* { 0xeb, 0x90, 0xeb, 0x90, 0xeb, 0x90, */		/* sync */
 /*		       0x00, 0xa0, 0x18, */		/* head */
 /*		       0xdc, 0x04, 0x50, 0x0d, */	/* data */
@@ -83,15 +61,41 @@ typedef struct reply {
 /*		       0x7f  }; */			/* term */
 
 
-int main_parsereply(int args, char *argv[])
+/* generate request message */
+int genreq(int args, char *argv[])
 {
-	uint8_t n;
-	reply_t r;
+	unsigned int i;
+	uint16_t crc_h, crc;
+
+	/* power-switch if parameter is given */
+	if (args == 2) {
+		req[7] = 0xaa;
+		req[9] = atoi(argv[1]);
+	}
+
+	crc_h = tracer_crc16(&(req[6]), req[8]+5);
+	crc = htobe16(crc_h);
+
+	req[11] = (uint8_t)(crc & (uint16_t)0x00ff);
+	req[10] = (uint8_t)(crc>>8 & (uint16_t)0x00ff);
+
+	for(i=0;i<13;i++) {
+		putc(req[i], stdout);
+	}
+	return 0;
+}
+
+/* parse status-reply message */
+int parsereply(int args, char *argv[])
+{
+	uint8_t n,s;
+	reply_t *r;
 	uint8_t csvout = 0, oneline = 0;
 	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl;
 	int8_t temp;
+	uint8_t buf[64];
 
-	uint16_t const sync = 0x90eb;
+	uint8_t const sync[] = { 0xeb, 0x90 };
 	uint16_t crc, crc_n;
 
 	if (args>2)
@@ -103,51 +107,64 @@ int main_parsereply(int args, char *argv[])
 	if (args == 2 && strncmp(argv[1], "-o", 3) == 0)
 		oneline = 1;
 
-	if (fread(&r, 1, sizeof(reply_t), stdin) < 36)
+	if (fread(buf, 1, sizeof(buf), stdin) < sizeof(reply_t) + 2)
 		return -1; /* EOPEN */
 
-	for(n=0;n<3;n++) {
-		if (le16toh(r.sync[n]) != sync)
-			return -2; /* EDATA */
+	/* sync-match */
+	s = 0;
+	for (n=0; n<12; n++) {
+		if (s && ( n%2 != s - 1 ) )
+			continue;
+
+		if ( buf[n] == sync[0] && buf[n+1] == sync[1] )
+			s = 1 + n % 2;
+		else if ( s )
+			break;
 	}
 
-	if (r.addr != 0)
+	if (!s)
+		return -2;
+
+	/* if there was at least one sync pattern, set the msg pointer */
+	r = (reply_t *)(&buf[n]);
+
+	if (r->addr != 0)
 		return -3; /* EINVAL */
 
-	if (r.function != 160)
+	if (r->function != 160)
 		return -3; /* EINVAL */
 
-	if (r.length != 24)
+	if (r->length != 24)
 		return -3; /* EINVAL */
 
-	if (r.term != 127)
+	if (r->term != 127)
 		return -2; /* EDATA */
 
-	crc = tracer_crc16(&(r.addr), r.length + 5);
+	crc = tracer_crc16(&(r->addr), r->length + 5);
 	if (crc) {
 		fprintf(stderr, "crc error");
 		return -2;
 	}
 
-	batv = le16toh(r.batv); /* ok */
+	batv = le16toh(r->batv);
 	batv /= 100;
 
-	minv = le16toh(r.minv); /* ok */
+	minv = le16toh(r->minv);
 	minv /= 100;
 
-	maxv = le16toh(r.maxv); /* ok */
+	maxv = le16toh(r->maxv);
 	maxv /= 100;
 
-	panv = le16toh(r.panv); /* ok */
+	panv = le16toh(r->panv);
 	panv /= 100;
 
-	loadc = le16toh(r.loadc); /* ok */
+	loadc = le16toh(r->loadc);
 	loadc /= 100;
 
-	pvc = le16toh(r.pvc); /* ok */
+	pvc = le16toh(r->pvc);
 	pvc /= 100;
 
-	temp = r.temp - 30;
+	temp = r->temp - 30;
 
 	flowc = pvc - loadc;
 	batl = ( 100 * ( batv - minv ) ) / ( maxv - minv );
@@ -155,32 +172,32 @@ int main_parsereply(int args, char *argv[])
 	if (csvout) {
 		printf("%.2f, %.2f, %.2f, %.2f, ", batv, panv, pvc, loadc);
 		printf("%.2f, %.2f, %d, ", minv, maxv, temp);
-		printf("%d, %d, %d, %d, ", r.loadon, r.charging, r.overload, r.fuse);
-		printf("%d, %d, %d, ", r.overdischarge, r.batfull, r.batoverload);
-		printf("0x%02x, 0x%02x \n", r.b1, r.b2);
+		printf("%d, %d, %d, %d, ", r->loadon, r->charging, r->overload, r->fuse);
+		printf("%d, %d, %d, ", r->overdischarge, r->batfull, r->batoverload);
+		printf("0x%02x, 0x%02x \n", r->b1, r->b2);
 	} else if (oneline) {
-		printf("battery: %.1f%%%s; ", batl, r.batfull?" (full)":"");
-		printf("load: %s; flow: %+.2f W; ", r.loadon?"on":"off", flowc * batv);
+		printf("battery: %.1f%%%s; ", batl, r->batfull?" (full)":"");
+		printf("load: %s; flow: %+.2f W; ", r->loadon?"on":"off", flowc * batv);
 		printf("t: %d degC; ", temp);
-		printf("%s%s%s%s\n", r.overload?" overload!":"",
-			r.fuse?" short-circuit!":"",
-			r.batoverload?" battery overload!":"",
-			r.overdischarge?" over discharge!":"");
+		printf("%s%s%s%s\n", r->overload?" overload!":"",
+			r->fuse?" short-circuit!":"",
+			r->batoverload?" battery overload!":"",
+			r->overdischarge?" over discharge!":"");
 	} else {
 		printf("pv voltage: %.2f V\n", panv);
 		printf("battery voltage: %.2f V\n", batv);
 		printf("pwm current: %.2f A\n", pvc);
-		printf("load power is %s\n", r.loadon?"on":"off");
+		printf("load power is %s\n", r->loadon?"on":"off");
 		printf("load current: %.2f A\n", loadc);
 		printf("flow: %+.2f W\n", flowc * batv);
 		printf("battery level: %.1f%%\n", batl);
 		printf("temperature: %d deg C\n", temp);
 		printf("alarms:");
-		printf("%s%s%s%s%s", r.overload?" overload!":"",
-			r.fuse?" short-circuit!":"",
-			r.batoverload?" battery overload!":"",
-			r.overdischarge?" over discharge!":"",
-			r.charging?"":" not charging!");
+		printf("%s%s%s%s%s", r->overload?" overload!":"",
+			r->fuse?" short-circuit!":"",
+			r->batoverload?" battery overload!":"",
+			r->overdischarge?" over discharge!":"",
+			r->charging?"":" not charging!");
 		printf("\n");
 
 	}
@@ -192,10 +209,10 @@ int main(int args, char *argv[]) {
 
 	cmd = basename(argv[0]);
 
-	if (!strcmp(cmd, "genreq") || !strcmp(cmd, "reqdata"))
-		return main_genreq(args, argv);
-	else if (!strcmp(cmd, "parsereply"))
-		return main_parsereply(args, argv);
+	if (!strcmp(cmd, "tracerreq"))
+		return genreq(args, argv);
+	else if (!strcmp(cmd, "tracerstat"))
+		return parsereply(args, argv);
 	else
 		return -1;
 }
