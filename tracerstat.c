@@ -15,13 +15,10 @@
 #include <endian.h>
 #include <string.h>
 #include <libgen.h>
+#include <sys/types.h>
+#include <termios.h>
+#include <unistd.h>
 
-/* a captured status request message with the CRC 0'd out */
-uint8_t req[13] = { 0xeb, 0x90, 0xeb, 0x90, 0xeb, 0x90, /* sync */
-			0x01, 0xa0, 0x01, /* head: address, function, length */
-			0x03,		  /* data */
-			0, 0,		  /* crc */
-			0x7f };		  /* term */
 
 typedef struct reply {
 	uint8_t		addr; /* 0 = reply/broadcast */
@@ -61,16 +58,27 @@ typedef struct reply {
 /*		       0x7f  }; */			/* term */
 
 
-/* generate request message */
-int genreq(int args, char *argv[])
+#define REQ_STATUS 0
+#define REQ_PON 1
+#define REQ_POFF 2
+
+/* send request message */
+int sendreq(int fd, unsigned int reqtype)
 {
 	unsigned int i;
 	uint16_t crc_h, crc;
+	/* a captured status request message with the CRC 0'd out */
+	uint8_t req[13] = { 0xeb, 0x90, 0xeb, 0x90, 0xeb, 0x90, /* sync */
+			0x01, 0xa0, 0x01, /* head: address, function, length */
+			0x03,		  /* data */
+			0, 0,		  /* crc */
+			0x7f };		  /* term */
+
 
 	/* power-switch if parameter is given */
-	if (args == 2) {
+	if (reqtype != REQ_STATUS) {
 		req[7] = 0xaa;
-		req[9] = atoi(argv[1]);
+		req[9] = reqtype & REQ_PON;
 	}
 
 	crc_h = tracer_crc16(&(req[6]), req[8]+5);
@@ -79,18 +87,23 @@ int genreq(int args, char *argv[])
 	req[11] = (uint8_t)(crc & (uint16_t)0x00ff);
 	req[10] = (uint8_t)(crc>>8 & (uint16_t)0x00ff);
 
-	for(i=0;i<13;i++) {
-		putc(req[i], stdout);
-	}
+	if (write(fd, req, 13) < 13)
+		return -2;
+
 	return 0;
 }
 
-/* parse status-reply message */
-int parsereply(int args, char *argv[])
+#define OUTFMT_ONELINE 0
+#define OUTFMT_VERBOSE 1
+#define OUTFMT_CSV 2
+#define OUTFMT_JSON 4
+
+/* read and parse reply message */
+int readreply(int fd, int outformat)
 {
 	uint8_t n,s;
 	reply_t *r;
-	uint8_t csvout = 0, oneline = 0;
+	uint8_t csvout = 0, oneline = 0, jsonout = 0, p = 0, tries = 0;
 	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
 	int8_t temp;
 	uint8_t buf[64];
@@ -98,27 +111,24 @@ int parsereply(int args, char *argv[])
 	uint8_t const sync[] = { 0xeb, 0x90 };
 	uint16_t crc, crc_n;
 
-	if (args>2)
-		return 1;
+	csvout = outformat == OUTFMT_CSV;
+	jsonout = outformat == OUTFMT_JSON;
+	oneline = !(outformat & OUTFMT_VERBOSE);
 
-	if (args == 2 && strncmp(argv[1], "-c", 3) == 0)
-		csvout = 1;
-
-	if (args == 2 && strncmp(argv[1], "-o", 3) == 0)
-		oneline = 1;
-
-	if (fread(buf, 1, sizeof(buf), stdin) < 12)
-		return -1; /* EOPEN */
+	while (read(fd, buf, sizeof(buf)) == -1 && tries < 64) {
+		usleep(20000);
+		tries++;
+	}
 
 	/* sync-match */
 	s = 0;
 	for (n=0; n<12; n++) {
-		if (s && ( n%2 != s - 1 ) )
+		if (s && ( n%2 != s - 1 ))
 			continue;
 
-		if ( buf[n] == sync[0] && buf[n+1] == sync[1] )
+		if (buf[n] == sync[0] && buf[n+1] == sync[1])
 			s = 1 + n % 2;
-		else if ( s )
+		else if (s)
 			break;
 	}
 
@@ -136,13 +146,14 @@ int parsereply(int args, char *argv[])
 
 	crc = tracer_crc16(&(r->addr), r->length + 5);
 	if (crc) {
-		fprintf(stderr, "crc error");
 		return -2;
 	}
 
 	if (r->function == 170) {
 		if (csvout) {
 			printf("%d", buf[n+3]);
+		} else if (jsonout) {
+			printf("{ \"class\": \"sensor\", \"load_switch\": %d }", buf[n+3]);
 		} else {
 			printf("load power switched %s", buf[n+3]?"on":"off");
 			if (!oneline)
@@ -192,6 +203,34 @@ int parsereply(int args, char *argv[])
 		printf("%d, %d, %d, %d, ", r->loadon, r->charging, r->overload, r->fuse);
 		printf("%d, %d, %d, ", r->overdischarge, r->batfull, r->batoverload);
 		printf("0x%02x, 0x%02x", r->b1, r->b2);
+	} else if (jsonout) {
+		printf("{ \"class\": \"sensors\", \"bat_volt\": %.2f, ", batv);
+		printf("\"bat_volt_min\": %.2f, \"bat_volt_max\": %.2f, ", minv, maxv);
+		printf("\"in1_volt\": %.2f, \"in1_amp\": %.2f, ", panv, pvc);
+		printf("\"in2_amp\": %.2f, \"temp1\": %.2f, ", loadc, temp);
+		printf("\"chg_state\": \"%s\", \"load_switch_state\": \"%s\"",
+				r->batfull?"batful":r->charging?"charging":"idle",
+				r->loadon?"on":"off");
+		if (r->overload || r->fuse || r->batoverload || r->overdischarge) {
+			printf("\"alarms\" : {");
+			if (r->overload) {
+				printf("%s%s", p?", ":"", "\"overload\"");
+				p=1;
+			}
+			if (r->fuse) {
+				printf("%s%s", p?", ":"", "\"shortcircuit\"");
+				p=1;
+			}
+			if (r->batoverload) {
+				printf("%s%s", p?", ":"", "\"batoverload\"");
+				p=1;
+			}
+			if (r->overdischarge) {
+				printf("%s%s", p?", ":"", "\"overdischarge\"");
+			}
+			printf(" }");
+		}
+		printf(" }");
 	} else if (oneline) {
 		printf("battery: %.1f%%%s; ", batl, r->batfull?" (full)":"");
 		printf("load: %s; flow: %+.2f W; ", r->loadon?"on":"off", batf);
@@ -223,15 +262,50 @@ int parsereply(int args, char *argv[])
 	return 0;
 }
 
+int open_tracer(char *device) {
+	struct termios mode = { 0, };
+	int fd;
+	fd = open(device, O_RDWR | O_NOCTTY | O_NDELAY);
+	if (fd < 0 || !isatty(fd))
+		return -2;
+
+	mode.c_cc[VMIN] = 1;
+	mode.c_cflag |= CS8;
+	if (cfsetispeed(&mode, B9600) < 0 || cfsetospeed(&mode, B9600) < 0)
+		return -2;
+
+	tcsetattr(fd,TCSANOW,&mode);
+
+	return fd;
+}
+
 int main(int args, char *argv[]) {
-	char *cmd;
+	int argn, outfmt = OUTFMT_VERBOSE, reqtype = REQ_STATUS;
+	char *device = "/dev/ttyUSB0";
+	int fd;
 
-	cmd = basename(argv[0]);
+	for (argn = 1; argn < args; argn++) {
+		if (!strncmp(argv[argn], "-o", 3))
+			outfmt &= ~OUTFMT_VERBOSE;
+		else if (!strncmp(argv[argn], "-c", 3))
+			outfmt = OUTFMT_CSV | outfmt & OUTFMT_VERBOSE;
+		else if (!strncmp(argv[argn], "-j", 3))
+			outfmt = OUTFMT_JSON;
+		else if (!strncmp(argv[argn], "-I", 3))
+			reqtype = REQ_PON;
+		else if (!strncmp(argv[argn], "-O", 3))
+			reqtype = REQ_POFF;
+		else
+			device = argv[argn];
+	}
 
-	if (!strcmp(cmd, "tracerreq"))
-		return genreq(args, argv);
-	else if (!strcmp(cmd, "tracerstat"))
-		return parsereply(args, argv);
-	else
+	fd = open_tracer(device);
+	if (fd < 0) {
+		fprintf(stderr, "can't open device %s\n", device);
 		return -1;
+	}
+
+	sendreq(fd, reqtype);
+	readreply(fd, outfmt);
+	close(fd);
 }

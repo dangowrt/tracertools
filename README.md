@@ -11,44 +11,22 @@ Great to see there is more people hacking these controllers! And even got
 something not entirely unlike a
 [datasheet](https://github.com/xxv/tracer/blob/42e32a0e757e529d196cc04b29148ed4f442125e/docs/Protocol-Tracer-MT-5.pdf)
 
-I made these two tools written in C, initially meant to probe/fuzz and
-experiment with captured communication logs. Now they are already useful to
-output the status information of the Tracer and switch the load power on/off.
+I initially made two tools written in C, initially meant to probe/fuzz and
+experiment with captured communication logs. Now that became a single tool
+which is useful to output the status information of the Tracer and switch
+the load power on/off.
 
-* `tracerreq` generate a request package. if called with a parameter, the load
-output is switched according to the parameter (0/1). if called without a
-parameter, a status-request is generated.
+`tracerstat` allows sending MT-5 (pseudo-ModBus) requests via a serial port
+to the device and translates the result into various useful output formats.
 
-* `tracerstat` converts a captured status reply package to various useful
-output formats.
+  * `-o` one-line output (no newline, useful for syslog)
+  * `-c` comma seperated output
+  * `-j` JSON output
 
-Beware! This is hacky and crude prototype-quality software.
+When called with parameter `-I` or `-O`, the load output is switched according
+to the parameter.
 
-To query the status of your controller and output the result you can use socat
-and stty from coreutils to set the baudrate, assuming you got the controller
-connected to your host via /dev/ttyUSB0.
-
-    stty -F /dev/ttyUSB0 9600 raw
-    tracerreq | socat - /dev/ttyUSB0,nonblock,raw,echo=0 | tracerstat
-
-I use these tools in combination with socat to collect the status of a
-Tracer MPPT solar controller:
-
-    tmpfile="$( mktemp )"
-    if [ -e "$tmpfile" ]; then
-      stty -F /dev/ttyUSB0 9600 raw
-      tracerreq | socat - /dev/ttyUSB0,nonblock,raw,echo=0 > "$tmpfile"
-      tracerstat < "$tmpfile"
-      tracerstat -o < "$tmpfile" | logger
-      (
-        echo -n "'$(uname -n)', '$(date)', "
-        tracerstat -c < "$tmpfile"
-      ) | alfred -s 160
-      rm "$tmpfile"
-    fi
-
-The tracerstat tool also accepts parameters -c for CSV output and -o for a
-human-readable one-liner (e.g. for use with syslog).
-
+To query the status of your controller simply call `tracerstat`, assuming that
+the controller is connected to your host via /dev/ttyUSB0.
 
 Thanks and have fun!

@@ -1,11 +1,8 @@
-all: tracerstat tracerreq
+all: tracerstat
 
 tracerstat: tracerstat.o
 
-tracerreq:
-	ln -s tracerstat tracerreq
-
 clean:
-	rm *.o tracerstat tracerreq
+	rm *.o tracerstat
 
 install:
