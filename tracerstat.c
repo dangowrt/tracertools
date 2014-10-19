@@ -271,9 +271,8 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 		printf("\"bat_volt_min\": %.2f, \"bat_volt_max\": %.2f, ", minv, maxv);
 		printf("\"in1_volt\": %.2f, \"in1_amp\": %.2f, ", panv, pvc);
 		printf("\"in2_amp\": %.2f, \"temp1\": %.2f, ", loadc, temp);
-		printf("\"chg_state\": \"%s\", \"load_switch_state\": \"%s\"",
-				r->batfull?"batful":r->charging?"charging":"idle",
-				r->loadon?"on":"off");
+		printf("\"chg_state\": \"%s\", \"load_switch\": %d",
+			r->batfull?"batful":r->charging?"charging":"idle", r->loadon);
 		if (r->overload || r->fuse || r->batoverload || r->overdischarge) {
 			printf("\"alarms\" : {");
 			if (r->overload) {
@@ -404,4 +403,5 @@ int main(int args, char *argv[]) {
 	sendreq(dev_fd, reqtype);
 	readreply(dev_fd, outfmt, devid, 0);
 	close(dev_fd);
+	return 0;
 }
