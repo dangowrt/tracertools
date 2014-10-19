@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <time.h>
 
+#define DEFAULT_DEVICE "/dev/ttyUSB0"
 #define CACHE_PATH_PREFIX "/var/cache/tracerstat"
 #define CACHE_LIFETIME 2 /* 2 seconds */
 
@@ -226,7 +227,6 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 		int outfd;
 		strncpy(tmpfilename, "/tmp/tracertemp-XXXXXX", 31);
 		outfd = mkstemp(tmpfilename);
-		fprintf(stderr, "using tmpfile '%s'\n", tmpfilename);
 		if (outfd > 0) {
 			char statefilename[64];
 			genstatefn(statefilename, devid);
@@ -327,10 +327,19 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 
 int open_tracer(char *device) {
 	struct termios mode;
+	struct stat devstat;
 	int fd;
-	fd = open(device, O_RDWR | O_NONBLOCK);
-	if (fd < 0 || !isatty(fd))
-		return -2;
+
+	fd = open(device, O_RDWR | O_NONBLOCK | O_NOCTTY);
+
+	if (fd < 0)
+		return -1;
+
+	if (fstat(fd, &devstat))
+		return -1;
+
+	if(!isatty(fd))
+		return -1;
 
 	tcgetattr(fd, &mode);
 	mode.c_iflag = 0;
@@ -351,7 +360,7 @@ int open_tracer(char *device) {
 
 int main(int args, char *argv[]) {
 	int argn, outfmt = OUTFMT_VERBOSE, reqtype = REQ_STATUS;
-	char *device = "/dev/ttyUSB0";
+	char *device = NULL;
 	char *devid;
 	int dev_fd = -1, cache_fd = -1;
 
@@ -369,6 +378,8 @@ int main(int args, char *argv[]) {
 		else
 			device = argv[argn];
 	}
+	if (!device)
+		device = strndup(DEFAULT_DEVICE, 64);
 
 	devid = basename(device);
 
