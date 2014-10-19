@@ -15,6 +15,7 @@
 #include <endian.h>
 #include <string.h>
 #include <libgen.h>
+#include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <termios.h>
@@ -136,12 +137,15 @@ int sendreq(int fd, unsigned int reqtype)
 /* read and parse reply message */
 int readreply(int fd, int outformat, char *devid, int nocache)
 {
+	fd_set readfs;
 	uint8_t n, s;
 	reply_t *r;
-	uint8_t csvout = 0, oneline = 0, jsonout = 0, p = 0, tries = 0;
+	uint8_t csvout = 0, oneline = 0, jsonout = 0, p = 0;
 	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
 	int8_t temp, l = -1;
 	uint8_t buf[64];
+	int res;
+	struct timeval tout;
 
 	uint8_t const sync[] = { 0xeb, 0x90 };
 	uint16_t crc, crc_n;
@@ -149,10 +153,17 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	csvout = outformat == OUTFMT_CSV;
 	jsonout = outformat == OUTFMT_JSON;
 	oneline = !(outformat & OUTFMT_VERBOSE);
-	while (l == -1 && tries < 64) {
-		l = read(fd, buf, sizeof(buf));
-		if (tries) usleep(20000);
-		tries++;
+
+	FD_SET(fd, &readfs);
+	tout.tv_usec = 500000;  /* milliseconds */
+	tout.tv_sec = 0;  /* seconds */
+	while (l < 25) {
+		res = select(fd+1, &readfs, NULL, NULL, &tout);
+		if (!res)
+			return -2; /* reply timeout */
+
+		if (FD_ISSET(fd, &readfs))
+			l = read(fd, buf, sizeof(buf));
 	}
 
 	/* sync-match */
@@ -311,18 +322,22 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 }
 
 int open_tracer(char *device) {
-	struct termios mode = { 0, };
+	struct termios mode;
 	int fd;
-	fd = open(device, O_RDWR | O_NOCTTY | O_NDELAY);
+	fd = open(device, O_RDWR | O_NONBLOCK);
 	if (fd < 0 || !isatty(fd))
 		return -2;
 
+	tcgetattr(fd, &mode);
+	mode.c_iflag = 0;
+	mode.c_oflag &= ~OPOST;
+	mode.c_lflag &= ~(ISIG | ICANON);
 	mode.c_cc[VMIN] = 1;
 	mode.c_cflag |= CS8;
 	if (cfsetispeed(&mode, B9600) < 0 || cfsetospeed(&mode, B9600) < 0)
 		return -2;
 
-	tcsetattr(fd,TCSANOW,&mode);
+	tcsetattr(fd, TCSANOW, &mode);
 
 	return fd;
 }
