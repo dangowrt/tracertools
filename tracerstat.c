@@ -15,10 +15,23 @@
 #include <endian.h>
 #include <string.h>
 #include <libgen.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
+#include <time.h>
 
+#define CACHE_PATH_PREFIX "/var/cache/tracerstat"
+#define CACHE_LIFETIME 20 /* 20 seconds */
+
+#define REQ_STATUS 0
+#define REQ_PON 1
+#define REQ_POFF 2
+
+#define OUTFMT_ONELINE 0
+#define OUTFMT_VERBOSE 1
+#define OUTFMT_CSV 2
+#define OUTFMT_JSON 4
 
 typedef struct reply {
 	uint8_t		addr; /* 0 = reply/broadcast */
@@ -58,9 +71,35 @@ typedef struct reply {
 /*		       0x7f  }; */			/* term */
 
 
-#define REQ_STATUS 0
-#define REQ_PON 1
-#define REQ_POFF 2
+void *genstatefn(char *fn, char *devid) {
+	snprintf(fn, 64, "%s-%s", CACHE_PATH_PREFIX, devid);
+}
+
+int try_open_cache(int outdated, char *devid) {
+	int fd;
+	struct stat cachestat;
+	char statefilename[64];
+	genstatefn(statefilename, devid);
+	fd = open(statefilename, O_RDONLY);
+	if (fd < 0)
+		return -1;
+	if (fstat(fd, &cachestat))
+		return -1;
+
+	if (!outdated && difftime(time(NULL), cachestat.st_mtime) > (double)2) {
+		close(fd);
+		return -2;
+	}
+
+	return fd;
+}
+
+void invalidate_cache(char *devid) {
+	struct stat cachestat;
+	char statefilename[64];
+	genstatefn(statefilename, devid);
+	unlink(statefilename);
+}
 
 /* send request message */
 int sendreq(int fd, unsigned int reqtype)
@@ -93,20 +132,18 @@ int sendreq(int fd, unsigned int reqtype)
 	return 0;
 }
 
-#define OUTFMT_ONELINE 0
-#define OUTFMT_VERBOSE 1
-#define OUTFMT_CSV 2
-#define OUTFMT_JSON 4
 
 /* read and parse reply message */
-int readreply(int fd, int outformat)
+int readreply(int fd, int outformat, char *devid, int nocache)
 {
-	uint8_t n,s;
+	uint8_t n, s;
 	reply_t *r;
 	uint8_t csvout = 0, oneline = 0, jsonout = 0, p = 0, tries = 0;
 	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
-	int8_t temp;
+	int8_t temp, l = -1;
 	uint8_t buf[64];
+	int tmpfd;
+	char *tmpfilename = "/tmp/tracerstatXXXXXX";
 
 	uint8_t const sync[] = { 0xeb, 0x90 };
 	uint16_t crc, crc_n;
@@ -114,9 +151,9 @@ int readreply(int fd, int outformat)
 	csvout = outformat == OUTFMT_CSV;
 	jsonout = outformat == OUTFMT_JSON;
 	oneline = !(outformat & OUTFMT_VERBOSE);
-
-	while (read(fd, buf, sizeof(buf)) == -1 && tries < 64) {
-		usleep(20000);
+	while (l == -1 && tries < 64) {
+		l = read(fd, buf, sizeof(buf));
+		if (tries) usleep(20000);
 		tries++;
 	}
 
@@ -159,7 +196,7 @@ int readreply(int fd, int outformat)
 			if (!oneline)
 				printf("\n");
 		}
-
+		invalidate_cache(devid);
 		return 0;
 	}
 
@@ -172,6 +209,18 @@ int readreply(int fd, int outformat)
 	if (r->term != 127)
 		return -2; /* EDATA */
 
+	/* store result in cache */
+	if (!nocache) {
+		int outfd;
+		outfd = mkostemp(tmpfilename, 0);
+		if (outfd > 0) {
+			char statefilename[64];
+			genstatefn(statefilename, devid);
+			write(outfd, buf, l);
+			close(outfd);
+			rename(tmpfilename, statefilename);
+		}
+	}
 
 	batv = le16toh(r->batv);
 	batv /= 100;
@@ -282,7 +331,8 @@ int open_tracer(char *device) {
 int main(int args, char *argv[]) {
 	int argn, outfmt = OUTFMT_VERBOSE, reqtype = REQ_STATUS;
 	char *device = "/dev/ttyUSB0";
-	int fd;
+	char *devid;
+	int dev_fd = -1, cache_fd = -1;
 
 	for (argn = 1; argn < args; argn++) {
 		if (!strncmp(argv[argn], "-o", 3))
@@ -299,13 +349,22 @@ int main(int args, char *argv[]) {
 			device = argv[argn];
 	}
 
-	fd = open_tracer(device);
-	if (fd < 0) {
+	devid = basename(device);
+	cache_fd = try_open_cache(0, devid);
+
+	if (cache_fd > 0 && reqtype == REQ_STATUS) {
+		if (!readreply(cache_fd, outfmt, devid, 1))
+			return 0;
+		close(cache_fd);
+	}
+
+	/* actually query device */
+	dev_fd = open_tracer(device);
+	if (dev_fd < 0) {
 		fprintf(stderr, "can't open device %s\n", device);
 		return -1;
 	}
-
-	sendreq(fd, reqtype);
-	readreply(fd, outfmt);
-	close(fd);
+	sendreq(dev_fd, reqtype);
+	readreply(dev_fd, outfmt, devid, 0);
+	close(dev_fd);
 }
