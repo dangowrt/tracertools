@@ -87,7 +87,7 @@ int try_open_cache(int outdated, char *devid) {
 	if (fstat(fd, &cachestat))
 		return -1;
 
-	if (!outdated && difftime(time(NULL), cachestat.st_mtime) > (double)2) {
+	if (!outdated && difftime(time(NULL), cachestat.st_mtime) > (double)CACHE_LIFETIME) {
 		close(fd);
 		return -2;
 	}
