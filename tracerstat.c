@@ -222,7 +222,7 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	if (!nocache) {
 		char *tmpfilename = "/tmp/tracerstatXXXXXX";
 		int outfd;
-		outfd = mkostemp(tmpfilename, 0);
+		outfd = mkstemp(tmpfilename);
 		if (outfd > 0) {
 			char statefilename[64];
 			genstatefn(statefilename, devid);
