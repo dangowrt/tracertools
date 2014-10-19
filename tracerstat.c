@@ -142,9 +142,9 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	reply_t *r;
 	uint8_t csvout = 0, oneline = 0, jsonout = 0, p = 0;
 	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
-	int8_t temp, l = -1;
+	int8_t temp, l = 0;
 	uint8_t buf[64];
-	int res;
+	int res = 1;
 	struct timeval tout;
 
 	uint8_t const sync[] = { 0xeb, 0x90 };
@@ -155,16 +155,16 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	oneline = !(outformat & OUTFMT_VERBOSE);
 
 	FD_SET(fd, &readfs);
-	tout.tv_usec = 500000;  /* milliseconds */
-	tout.tv_sec = 0;  /* seconds */
-	while (l < 25) {
+	tout.tv_usec = 50000;
+	tout.tv_sec = 0;
+	while (res) {
 		res = select(fd+1, &readfs, NULL, NULL, &tout);
-		if (!res)
-			return -2; /* reply timeout */
-
 		if (FD_ISSET(fd, &readfs))
-			l = read(fd, buf, sizeof(buf));
+			l += read(fd, &buf[l], sizeof(buf) - l);
 	}
+
+	if (l < 9) /* smallest possible paket */
+		return -2; /* reply timeout */
 
 	/* sync-match */
 	s = 0;
@@ -333,11 +333,14 @@ int open_tracer(char *device) {
 	mode.c_oflag &= ~OPOST;
 	mode.c_lflag &= ~(ISIG | ICANON);
 	mode.c_cc[VMIN] = 1;
+	mode.c_cc[VTIME] = 0;
 	mode.c_cflag |= CS8;
 	if (cfsetispeed(&mode, B9600) < 0 || cfsetospeed(&mode, B9600) < 0)
 		return -2;
 
+	tcflush(fd, TCIOFLUSH);
 	tcsetattr(fd, TCSANOW, &mode);
+	tcflush(fd, TCIOFLUSH);
 
 	return fd;
 }
