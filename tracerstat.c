@@ -142,8 +142,6 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
 	int8_t temp, l = -1;
 	uint8_t buf[64];
-	int tmpfd;
-	char *tmpfilename = "/tmp/tracerstatXXXXXX";
 
 	uint8_t const sync[] = { 0xeb, 0x90 };
 	uint16_t crc, crc_n;
@@ -211,6 +209,7 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 
 	/* store result in cache */
 	if (!nocache) {
+		char *tmpfilename = "/tmp/tracerstatXXXXXX";
 		int outfd;
 		outfd = mkostemp(tmpfilename, 0);
 		if (outfd > 0) {
@@ -350,12 +349,17 @@ int main(int args, char *argv[]) {
 	}
 
 	devid = basename(device);
-	cache_fd = try_open_cache(0, devid);
 
-	if (cache_fd > 0 && reqtype == REQ_STATUS) {
-		if (!readreply(cache_fd, outfmt, devid, 1))
-			return 0;
-		close(cache_fd);
+	/* try cache */
+	if (reqtype == REQ_STATUS) {
+		int res;
+		cache_fd = try_open_cache(0, devid);
+		if (cache_fd > 0) {
+			res = readreply(cache_fd, outfmt, devid, 1);
+			close(cache_fd);
+			if (!res)
+				return 0;
+		};
 	}
 
 	/* actually query device */
