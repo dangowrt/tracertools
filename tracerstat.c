@@ -23,7 +23,7 @@
 #include <time.h>
 
 #define CACHE_PATH_PREFIX "/var/cache/tracerstat"
-#define CACHE_LIFETIME 20 /* 20 seconds */
+#define CACHE_LIFETIME 2 /* 2 seconds */
 
 #define REQ_STATUS 0
 #define REQ_PON 1
@@ -81,9 +81,10 @@ int try_open_cache(int outdated, char *devid) {
 	struct stat cachestat;
 	char statefilename[64];
 	genstatefn(statefilename, devid);
-	fd = open(statefilename, O_RDONLY);
+	fd = open(statefilename, O_RDONLY | O_NONBLOCK );
 	if (fd < 0)
 		return -1;
+
 	if (fstat(fd, &cachestat))
 		return -1;
 
@@ -144,7 +145,7 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
 	int8_t temp, l = 0;
 	uint8_t buf[64];
-	int res = 1;
+	int res = 0;
 	struct timeval tout;
 
 	uint8_t const sync[] = { 0xeb, 0x90 };
@@ -155,13 +156,14 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	oneline = !(outformat & OUTFMT_VERBOSE);
 
 	FD_SET(fd, &readfs);
-	tout.tv_usec = 50000;
+	tout.tv_usec = 100000;
 	tout.tv_sec = 0;
-	while (res) {
-		res = select(fd+1, &readfs, NULL, NULL, &tout);
-		if (FD_ISSET(fd, &readfs))
+	do {
+		if (isatty(fd))
+			res = select(fd+1, &readfs, NULL, NULL, &tout);
+		if (!isatty(fd) || FD_ISSET(fd, &readfs))
 			l += read(fd, &buf[l], sizeof(buf) - l);
-	}
+	} while (res);
 
 	if (l < 9) /* smallest possible paket */
 		return -2; /* reply timeout */
@@ -220,9 +222,11 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 
 	/* store result in cache */
 	if (!nocache) {
-		char *tmpfilename = "/tmp/tracerstatXXXXXX";
+		char tmpfilename[32];
 		int outfd;
+		strncpy(tmpfilename, "/tmp/tracertemp-XXXXXX", 31);
 		outfd = mkstemp(tmpfilename);
+		fprintf(stderr, "using tmpfile '%s'\n", tmpfilename);
 		if (outfd > 0) {
 			char statefilename[64];
 			genstatefn(statefilename, devid);
