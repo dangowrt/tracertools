@@ -150,8 +150,8 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	uint8_t const sync[] = { 0xeb, 0x90 };
 	uint16_t crc, crc_n;
 
-	csvout = outformat == OUTFMT_CSV;
-	jsonout = outformat == OUTFMT_JSON;
+	csvout = !!(outformat & OUTFMT_CSV);
+	jsonout = !!(outformat & OUTFMT_JSON);
 	oneline = !(outformat & OUTFMT_VERBOSE);
 
 	FD_SET(fd, &readfs);
