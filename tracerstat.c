@@ -15,6 +15,7 @@
 #include <endian.h>
 #include <string.h>
 #include <libgen.h>
+#include <sys/param.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -24,8 +25,8 @@
 #include <time.h>
 
 #define DEFAULT_DEVICE "/dev/ttyUSB0"
-#define CACHE_PATH_PREFIX "/var/cache/tracerstat"
-#define CACHE_LIFETIME 2 /* 2 seconds */
+#define CACHE_PATH_PREFIX "/var/spool/tracerstat"
+#define CACHE_LIFETIME 2 /* seconds */
 
 #define REQ_STATUS 0
 #define REQ_PON 1
@@ -143,11 +144,11 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	fd_set readfs;
 	uint8_t n, s;
 	reply_t *r;
-	uint8_t csvout = 0, oneline = 0, jsonout = 0, p = 0;
+	uint8_t csvout = 0, oneline = 0, jsonout = 0, p = 0, l = 0;
 	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
-	int8_t temp, l = 0;
-	uint8_t buf[64];
-	int res = 0;
+	int8_t temp;
+	uint8_t buf[64] = {0,};
+	int res = 0, res2 = 0;
 	struct timeval tout;
 
 	uint8_t const sync[] = { 0xeb, 0x90 };
@@ -158,14 +159,20 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	oneline = !(outformat & OUTFMT_VERBOSE);
 
 	FD_SET(fd, &readfs);
-	tout.tv_usec = 250000;
+	tout.tv_usec = 500000;
 	tout.tv_sec = 0;
 	do {
 		if (isatty(fd))
 			res = select(fd+1, &readfs, NULL, NULL, &tout);
-		if (!isatty(fd) || FD_ISSET(fd, &readfs))
-			l += read(fd, &buf[l], sizeof(buf) - l);
-	} while (res);
+		if (!isatty(fd) || FD_ISSET(fd, &readfs)) {
+			res2 = read(fd, &buf[l], sizeof(buf) - l);
+			if (res2 > 0) {
+				l += res2;
+				if (buf[l] == 0x77) /* EOM */
+					break;
+			}
+		}
+	} while (res && l < sizeof(buf));
 
 	if (l < 9) /* smallest possible paket */
 		return -2; /* reply timeout */
@@ -233,7 +240,8 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 			genstatefn(statefilename, devid);
 			write(outfd, buf, l);
 			close(outfd);
-			rename(tmpfilename, statefilename);
+			if (rename(tmpfilename, statefilename))
+				unlink(tmpfilename);
 		}
 	}
 
@@ -325,6 +333,7 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	return 0;
 }
 
+/* todo: check and use UUCP-style lockfiles in /var/lock/ */
 int open_tracer(char *device) {
 	struct termios mode;
 	struct stat devstat;
@@ -360,7 +369,7 @@ int open_tracer(char *device) {
 
 int main(int args, char *argv[]) {
 	int argn, outfmt = OUTFMT_VERBOSE, reqtype = REQ_STATUS;
-	char *device = NULL;
+	char device[64] = {0,};
 	char *devid;
 	int dev_fd = -1, cache_fd = -1;
 
@@ -376,10 +385,11 @@ int main(int args, char *argv[]) {
 		else if (!strncmp(argv[argn], "-O", 3))
 			reqtype = REQ_POFF;
 		else
-			device = argv[argn];
+			strncpy(device, argv[argn], sizeof(device));
 	}
+
 	if (!device)
-		device = strndup(DEFAULT_DEVICE, 64);
+		strncpy(device, DEFAULT_DEVICE, sizeof(device));
 
 	devid = basename(device);
 
@@ -390,7 +400,9 @@ int main(int args, char *argv[]) {
 		if (cache_fd > 0) {
 			res = readreply(cache_fd, outfmt, devid, 1);
 			close(cache_fd);
-			if (!res)
+			if (res)
+				invalidate_cache(devid);
+			else
 				return 0;
 		};
 	}
