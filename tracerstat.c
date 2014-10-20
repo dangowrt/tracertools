@@ -157,7 +157,7 @@ int readreply(int fd, int outformat, char *devid, int nocache)
 	oneline = !(outformat & OUTFMT_VERBOSE);
 
 	FD_SET(fd, &readfs);
-	tout.tv_usec = 100000;
+	tout.tv_usec = 250000;
 	tout.tv_sec = 0;
 	do {
 		if (isatty(fd))
