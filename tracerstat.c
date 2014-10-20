@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
+#include <string.h>
 #include <time.h>
 
 #define DEFAULT_DEVICE "/dev/ttyUSB0"
