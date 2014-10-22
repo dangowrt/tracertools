@@ -1,7 +1,7 @@
 /*
  * tracer stat tool - 0.9
- * converts a status reply to meaningful output formats,
- * generates status request and load power switch requests.
+ * generates status and load power switch requests and converts the
+ * reply to meaningful output formats.
  *
  * Copyright (C) 2014 Daniel Golle <daniel@makrotopia.org>
  *
@@ -79,7 +79,7 @@ void *genstatefn(char *fn, char *devid) {
 	snprintf(fn, 64, "%s-%s", CACHE_PATH_PREFIX, devid);
 }
 
-int try_open_cache(int outdated, char *devid) {
+int open_cache(int outdated, char *devid) {
 	int fd;
 	struct stat cachestat;
 	char statefilename[64];
@@ -104,6 +104,41 @@ void invalidate_cache(char *devid) {
 	char statefilename[64];
 	genstatefn(statefilename, devid);
 	unlink(statefilename);
+}
+
+
+/* todo: check and use UUCP-style lockfiles in /var/lock/ */
+int open_tracer(char *device) {
+	struct termios mode;
+	struct stat devstat;
+	int fd;
+
+	fd = open(device, O_RDWR | O_NONBLOCK | O_NOCTTY);
+
+	if (fd < 0)
+		return -1;
+
+	if (fstat(fd, &devstat))
+		return -1;
+
+	if(!isatty(fd))
+		return -1;
+
+	tcgetattr(fd, &mode);
+	mode.c_iflag = 0;
+	mode.c_oflag &= ~OPOST;
+	mode.c_lflag &= ~(ISIG | ICANON);
+	mode.c_cc[VMIN] = 1;
+	mode.c_cc[VTIME] = 0;
+	mode.c_cflag |= CS8;
+	if (cfsetispeed(&mode, B9600) < 0 || cfsetospeed(&mode, B9600) < 0)
+		return -2;
+
+	tcflush(fd, TCIOFLUSH);
+	tcsetattr(fd, TCSANOW, &mode);
+	tcflush(fd, TCIOFLUSH);
+
+	return fd;
 }
 
 /* send request message */
@@ -148,8 +183,9 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
 	int8_t temp;
 	uint8_t buf[64] = {0,};
-	int res = 0, res2 = 0;
+	int timeout = 0, res = 0;
 	struct timeval tout;
+	unsigned char istty;
 
 	uint8_t const sync[] = { 0xeb, 0x90 };
 	uint16_t crc, crc_n;
@@ -159,41 +195,44 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 	oneline = !(outformat & OUTFMT_VERBOSE);
 
 	FD_SET(fd, &readfs);
-	tout.tv_usec = 500000;
+	tout.tv_usec = 200000;
 	tout.tv_sec = 0;
+	istty = isatty(fd);
+	s = istty?0:3;
+	timeout = !s;
 	do {
-		if (isatty(fd))
-			res = select(fd+1, &readfs, NULL, NULL, &tout);
-		if (!isatty(fd) || FD_ISSET(fd, &readfs)) {
-			res2 = read(fd, &buf[l], sizeof(buf) - l);
-			if (res2 > 0) {
-				l += res2;
-				if (buf[l] == 0x77) /* EOM */
-					break;
+		if (istty)
+			timeout = !select(fd+1, &readfs, NULL, NULL, &tout);
+		if (!istty || FD_ISSET(fd, &readfs)) {
+			/* read byte-wise until sync */
+			res = read(fd, &buf[l], s==4?sizeof(buf) - l:s?s:1);
+			if (res > 0) {
+				l += res;
+
+				if (l == 2 && buf[0] == sync[0] &&
+				    buf[1] == sync[1]) {
+					s = 2;
+					l = 0;
+					continue;
+				} else if (l == 3 && buf[1] == sync[0] &&
+				    buf[2] == sync[2]) {
+					s = 1;
+					l = 0;
+					continue;
+				} else if (s & 3 && l > 0 && buf[0] != sync[0])
+					s = 4;
 			}
 		}
-	} while (res && l < sizeof(buf));
+	} while (istty?!timeout:res>0);
 
-	if (l < 9) /* smallest possible paket */
-		return -2; /* reply timeout */
-
-	/* sync-match */
-	s = 0;
-	for (n=0; n<12; n++) {
-		if (s && ( n%2 != s - 1 ))
-			continue;
-
-		if (buf[n] == sync[0] && buf[n+1] == sync[1])
-			s = 1 + n % 2;
-		else if (s)
-			break;
-	}
+	if (l < 5) /* smallest possible paket */
+		return -2;
 
 	if (!s)
 		return -2;
 
 	/* if there was at least one sync pattern, set the msg pointer */
-	r = (reply_t *)(&buf[n]);
+	r = (reply_t *)(&buf);
 
 	if (r->addr != 0)
 		return -3; /* EINVAL */
@@ -207,12 +246,14 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 	}
 
 	if (r->function == 170) {
+		if (r->length != 1)
+			return -3; /* EINVAL */
 		if (csvout) {
-			printf("%d", buf[n+3]);
+			printf("%d", buf[3]);
 		} else if (jsonout) {
-			printf("{ \"class\": \"sensor\", \"load_switch\": %d }", buf[n+3]);
+			printf("{ \"class\": \"sensor\", \"load_switch\": %d }", buf[3]);
 		} else {
-			printf("load power switched %s", buf[n+3]?"on":"off");
+			printf("load power switched %s", buf[3]?"on":"off");
 			if (!oneline)
 				printf("\n");
 		}
@@ -226,9 +267,6 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 	if (r->length != 24)
 		return -3; /* EINVAL */
 
-	if (r->term != 127)
-		return -2; /* EDATA */
-
 	/* store result in cache */
 	if (!nocache) {
 		char tmpfilename[32];
@@ -238,7 +276,7 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 		if (outfd > 0) {
 			char statefilename[64];
 			genstatefn(statefilename, devid);
-			write(outfd, buf, l);
+			write(outfd, buf, l-1); /* skip EOM char */
 			close(outfd);
 			if (rename(tmpfilename, statefilename))
 				unlink(tmpfilename);
@@ -303,7 +341,7 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 		}
 		printf(" }");
 	} else if (oneline) {
-		printf("battery: %.1f%%%s; ", batl, r->batfull?" (full)":"");
+		printf("bat: %.1f%s; ", batv, r->batfull?" (full)":"");
 		printf("load: %s; flow: %+.2f W; ", r->loadon?"on":"off", batf);
 		printf("t: %d degC; ", temp);
 		printf("%s%s%s%s\n", r->overload?" overload!":"",
@@ -333,45 +371,13 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 	return 0;
 }
 
-/* todo: check and use UUCP-style lockfiles in /var/lock/ */
-int open_tracer(char *device) {
-	struct termios mode;
-	struct stat devstat;
-	int fd;
-
-	fd = open(device, O_RDWR | O_NONBLOCK | O_NOCTTY);
-
-	if (fd < 0)
-		return -1;
-
-	if (fstat(fd, &devstat))
-		return -1;
-
-	if(!isatty(fd))
-		return -1;
-
-	tcgetattr(fd, &mode);
-	mode.c_iflag = 0;
-	mode.c_oflag &= ~OPOST;
-	mode.c_lflag &= ~(ISIG | ICANON);
-	mode.c_cc[VMIN] = 1;
-	mode.c_cc[VTIME] = 0;
-	mode.c_cflag |= CS8;
-	if (cfsetispeed(&mode, B9600) < 0 || cfsetospeed(&mode, B9600) < 0)
-		return -2;
-
-	tcflush(fd, TCIOFLUSH);
-	tcsetattr(fd, TCSANOW, &mode);
-	tcflush(fd, TCIOFLUSH);
-
-	return fd;
-}
-
 int main(int args, char *argv[]) {
 	int argn, outfmt = OUTFMT_VERBOSE, reqtype = REQ_STATUS;
 	char device[64] = {0,};
 	char *devid;
 	int dev_fd = -1, cache_fd = -1;
+	int res;
+	unsigned int tries = 0;
 	unsigned char use_cache = 1;
 
 	for (argn = 1; argn < args; argn++) {
@@ -398,8 +404,7 @@ int main(int args, char *argv[]) {
 
 	/* try cache */
 	if (use_cache && reqtype == REQ_STATUS) {
-		int res;
-		cache_fd = try_open_cache(0, devid);
+		cache_fd = open_cache(0, devid);
 		if (cache_fd > 0) {
 			res = readreply(cache_fd, outfmt, 1, devid);
 			close(cache_fd);
@@ -416,8 +421,15 @@ int main(int args, char *argv[]) {
 		fprintf(stderr, "can't open device %s\n", device);
 		return -1;
 	}
-	sendreq(dev_fd, reqtype);
-	readreply(dev_fd, outfmt, !use_cache, devid);
+
+	do {
+		res = sendreq(dev_fd, reqtype);
+		if (res) continue;
+		res = readreply(dev_fd, outfmt, !use_cache, devid);
+		if (!res) break;
+		tries++;
+	} while(tries < 3);
+
 	close(dev_fd);
 	return 0;
 }
