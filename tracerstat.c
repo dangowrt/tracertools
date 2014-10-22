@@ -317,7 +317,7 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 		printf("{ \"class\": \"sensors\", \"bat_volt\": %.2f, ", batv);
 		printf("\"bat_volt_min\": %.2f, \"bat_volt_max\": %.2f, ", minv, maxv);
 		printf("\"in1_volt\": %.2f, \"in1_amp\": %.2f, ", panv, pvc);
-		printf("\"in2_amp\": %.2f, \"temp1\": %.2f, ", loadc, temp);
+		printf("\"in2_amp\": %.2f, \"temp1\": %d, ", loadc, temp);
 		printf("\"chg_state\": \"%s\", \"load_switch\": %d",
 			r->batfull?"batful":r->charging?"charging":"idle", r->loadon);
 		if (r->overload || r->fuse || r->batoverload || r->overdischarge) {
