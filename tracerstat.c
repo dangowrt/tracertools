@@ -388,7 +388,7 @@ int main(int args, char *argv[]) {
 			strncpy(device, argv[argn], sizeof(device));
 	}
 
-	if (!device)
+	if (!device[0])
 		strncpy(device, DEFAULT_DEVICE, sizeof(device));
 
 	devid = basename(device);
