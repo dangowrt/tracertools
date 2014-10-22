@@ -304,8 +304,8 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 	temp = r->temp - 30;
 
 	flowc = pvc - loadc;
-	batl = ( 100 * ( batv - minv ) ) / ( maxv - minv );
-	batf = ( r->batfull ? ((flowc>0)?0:flowc) : flowc ) * batv;
+	batl = r->batfull?100:(( 100 * ( batv - minv ) ) / ( (r->charging?maxv:maxv-1) - minv ));
+	batf = ( r->charging && !r->batfull ? ((flowc>0)?0:flowc) : flowc ) * batv;
 
 	if (csvout) {
 		printf("%.2f, %.2f, %.2f, %.2f, ", batv, panv, pvc, loadc);
@@ -341,7 +341,7 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 		}
 		printf(" }");
 	} else if (oneline) {
-		printf("bat: %.1f%s; ", batv, r->batfull?" (full)":"");
+		printf("battery: %.1f V%s; ", batv, r->batfull?" (full)":"");
 		printf("load: %s; flow: %+.2f W; ", r->loadon?"on":"off", batf);
 		printf("t: %d degC; ", temp);
 		printf("%s%s%s%s\n", r->overload?" overload!":"",
