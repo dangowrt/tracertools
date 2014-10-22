@@ -139,7 +139,7 @@ int sendreq(int fd, unsigned int reqtype)
 
 
 /* read and parse reply message */
-int readreply(int fd, int outformat, char *devid, int nocache)
+int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 {
 	fd_set readfs;
 	uint8_t n, s;
@@ -372,6 +372,7 @@ int main(int args, char *argv[]) {
 	char device[64] = {0,};
 	char *devid;
 	int dev_fd = -1, cache_fd = -1;
+	unsigned char use_cache = 1;
 
 	for (argn = 1; argn < args; argn++) {
 		if (!strncmp(argv[argn], "-o", 3))
@@ -384,6 +385,8 @@ int main(int args, char *argv[]) {
 			reqtype = REQ_PON;
 		else if (!strncmp(argv[argn], "-O", 3))
 			reqtype = REQ_POFF;
+		else if (!strncmp(argv[argn], "-R", 3))
+			use_cache = 0;
 		else
 			strncpy(device, argv[argn], sizeof(device));
 	}
@@ -394,11 +397,11 @@ int main(int args, char *argv[]) {
 	devid = basename(device);
 
 	/* try cache */
-	if (reqtype == REQ_STATUS) {
+	if (use_cache && reqtype == REQ_STATUS) {
 		int res;
 		cache_fd = try_open_cache(0, devid);
 		if (cache_fd > 0) {
-			res = readreply(cache_fd, outfmt, devid, 1);
+			res = readreply(cache_fd, outfmt, 1, devid);
 			close(cache_fd);
 			if (res)
 				invalidate_cache(devid);
@@ -414,7 +417,7 @@ int main(int args, char *argv[]) {
 		return -1;
 	}
 	sendreq(dev_fd, reqtype);
-	readreply(dev_fd, outfmt, devid, 0);
+	readreply(dev_fd, outfmt, !use_cache, devid);
 	close(dev_fd);
 	return 0;
 }
