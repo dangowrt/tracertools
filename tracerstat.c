@@ -426,10 +426,12 @@ int main(int args, char *argv[]) {
 		if (res) continue;
 		res = readreply(dev_fd, outfmt, !use_cache, devid);
 		if (!res) break;
+
+		tcflush(dev_fd, TCIOFLUSH);
 		close(dev_fd);
 		usleep(50000);
 		tries++;
-	} while(tries < 3);
+	} while(tries < 7);
 
 	return 0;
 }
