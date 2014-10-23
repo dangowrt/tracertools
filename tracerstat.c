@@ -195,7 +195,7 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 	oneline = !(outformat & OUTFMT_VERBOSE);
 
 	FD_SET(fd, &readfs);
-	tout.tv_usec = 200000;
+	tout.tv_usec = 500000;
 	tout.tv_sec = 0;
 	istty = isatty(fd);
 	s = istty?0:3;
@@ -415,21 +415,21 @@ int main(int args, char *argv[]) {
 		};
 	}
 
+	do {
 	/* actually query device */
 	dev_fd = open_tracer(device);
-	if (dev_fd < 0) {
-		fprintf(stderr, "can't open device %s\n", device);
-		return -1;
-	}
-
-	do {
+		if (dev_fd < 0) {
+			fprintf(stderr, "can't open device %s\n", device);
+			return -1;
+		}
 		res = sendreq(dev_fd, reqtype);
 		if (res) continue;
 		res = readreply(dev_fd, outfmt, !use_cache, devid);
 		if (!res) break;
+		close(dev_fd);
+		usleep(50000);
 		tries++;
 	} while(tries < 3);
 
-	close(dev_fd);
 	return 0;
 }
