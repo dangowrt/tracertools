@@ -208,7 +208,6 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 			res = read(fd, &buf[l], s==4?sizeof(buf) - l:s?s:1);
 			if (res > 0) {
 				l += res;
-
 				if (l == 2 && buf[0] == sync[0] &&
 				    buf[1] == sync[1]) {
 					s = 2;
@@ -219,8 +218,15 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 					s = 1;
 					l = 0;
 					continue;
-				} else if (s & 3 && l > 0 && buf[0] != sync[0])
-					s = 4;
+				} else if (s & 3 && l > 0 &&
+					buf[0] != sync[0]) {
+					s = 4; /* sync'ed */
+				}
+
+				if (s == 4 && l >= 5) {
+					if (l >= buf[2] + 5)
+						break;
+				}
 			}
 		}
 	} while (istty?!timeout:res>0);
@@ -276,7 +282,7 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 		if (outfd > 0) {
 			char statefilename[64];
 			genstatefn(statefilename, devid);
-			write(outfd, buf, l-1); /* skip EOM char */
+			write(outfd, buf, r->length + 5); /* skip EOM char */
 			close(outfd);
 			if (rename(tmpfilename, statefilename))
 				unlink(tmpfilename);
