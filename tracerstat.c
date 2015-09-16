@@ -180,7 +180,7 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 	uint8_t n, s;
 	reply_t *r;
 	uint8_t csvout = 0, oneline = 0, jsonout = 0, p = 0, l = 0;
-	double batv, minv, maxv, panv, loadc, panc, pvc, flowc, batl, batf;
+	uint32_t batv, minv, maxv, panv, loadc, panc, pvc;
 	int8_t temp;
 	uint8_t buf[64] = {0,};
 	int timeout = 0, res = 0;
@@ -290,44 +290,40 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 	}
 
 	batv = le16toh(r->batv);
-	batv /= 100;
+	batv *= 10;
 
 	minv = le16toh(r->minv);
-	minv /= 100;
+	minv *= 10;
 
 	maxv = le16toh(r->maxv);
-	maxv /= 100;
+	maxv *= 10;
 
 	panv = le16toh(r->panv);
-	panv /= 100;
+	panv *= 10;
 
 	loadc = le16toh(r->loadc);
-	loadc /= 100;
+	loadc *= 10;
 
 	pvc = le16toh(r->pvc);
-	pvc /= 100;
+	pvc *= 10;
 
 	temp = r->temp - 30;
 
-	flowc = pvc - loadc;
-	batl = r->batfull?100:(( 100 * ( batv - minv ) ) / ( (r->charging?maxv:maxv-1) - minv ));
-	batf = ( r->charging && !r->batfull ? ((flowc>0)?0:flowc) : flowc ) * batv;
-
 	if (csvout) {
-		printf("%.2f, %.2f, %.2f, %.2f, ", batv, panv, pvc, loadc);
-		printf("%.2f, %.2f, %d, ", minv, maxv, temp);
+		printf("%u, %u, %u, %u, ", batv, panv, pvc, loadc);
+		printf("%u, %u, %d, ", minv, maxv, temp);
 		printf("%d, %d, %d, %d, ", r->loadon, r->charging, r->overload, r->fuse);
 		printf("%d, %d, %d, ", r->overdischarge, r->batfull, r->batoverload);
 		printf("0x%02x, 0x%02x", r->b1, r->b2);
 	} else if (jsonout) {
-		printf("{ \"class\": \"sensors\", \"bat_volt\": %.2f, ", batv);
-		printf("\"bat_volt_min\": %.2f, \"bat_volt_max\": %.2f, ", minv, maxv);
-		printf("\"in1_volt\": %.2f, \"in1_amp\": %.2f, ", panv, pvc);
-		printf("\"in2_amp\": %.2f, \"temp1\": %d, ", loadc, temp);
+		printf("{ \"class\": \"sensors\", \"bat_volt\": %u, ", batv);
+		printf("\"bat_volt_min\": %u, \"bat_volt_max\": %u, ", minv, maxv);
+		printf("\"in1_volt\": %u, \"in1_amp\": %u, ", panv, pvc);
+		printf("\"in2_amp\": %u, \"temp1\": %d, ", loadc, temp);
 		printf("\"chg_state\": \"%s\", \"load_switch\": %d",
 			r->batfull?"batful":r->charging?"charging":"idle", r->loadon);
 		if (r->overload || r->fuse || r->batoverload || r->overdischarge) {
-			printf("\"alarms\" : {");
+			printf(", \"alarms\" : [");
 			if (r->overload) {
 				printf("%s%s", p?", ":"", "\"overload\"");
 				p=1;
@@ -343,25 +339,22 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 			if (r->overdischarge) {
 				printf("%s%s", p?", ":"", "\"overdischarge\"");
 			}
-			printf(" }");
+			printf(" ]");
 		}
 		printf(" }");
 	} else if (oneline) {
-		printf("battery: %.1f V%s; ", batv, r->batfull?" (full)":"");
-		printf("load: %s; flow: %+.2f W; ", r->loadon?"on":"off", batf);
-		printf("t: %d degC; ", temp);
+		printf("battery: %u mV%s; ", batv, r->batfull?" (full)":"");
+		printf("load: %s; t: %d degC;", r->loadon?"on":"off", temp);
 		printf("%s%s%s%s\n", r->overload?" overload!":"",
 			r->fuse?" short-circuit!":"",
 			r->batoverload?" battery overload!":"",
 			r->overdischarge?" over discharge!":"");
 	} else {
-		printf("pv voltage: %.2f V\n", panv);
-		printf("battery voltage: %.2f V\n", batv);
-		printf("pwm current: %.2f A\n", pvc);
+		printf("pv voltage: %u mV\n", panv);
+		printf("battery voltage: %u mV\n", batv);
+		printf("pwm current: %u mA\n", pvc);
 		printf("load power is %s\n", r->loadon?"on":"off");
-		printf("load current: %.2f A\n", loadc);
-		printf("battery flow: %+.2f W\n", batf);
-		printf("battery level: %.1f%%\n", batl);
+		printf("load current: %u mA\n", loadc);
 		printf("temperature: %d deg C\n", temp);
 		printf("alarms:");
 		printf("%s%s%s%s%s%s",
@@ -372,7 +365,6 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 			r->overdischarge?" over discharge!":"",
 			r->charging?"":" not charging!");
 		printf("\n");
-
 	}
 	return 0;
 }
