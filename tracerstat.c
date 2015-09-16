@@ -316,7 +316,7 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 		printf("%d, %d, %d, ", r->overdischarge, r->batfull, r->batoverload);
 		printf("0x%02x, 0x%02x", r->b1, r->b2);
 	} else if (jsonout) {
-		printf("{ \"class\": \"sensors\", \"bat_volt\": %u, ", batv);
+		printf("{ \"class\": \"sensors\", \"name\": \"tracermppt\", \"bat_volt\": %u, ", batv);
 		printf("\"bat_volt_min\": %u, \"bat_volt_max\": %u, ", minv, maxv);
 		printf("\"in1_volt\": %u, \"in1_amp\": %u, ", panv, pvc);
 		printf("\"in2_amp\": %u, \"temp1\": %d, ", loadc, temp);
