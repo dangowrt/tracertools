@@ -147,7 +147,8 @@ int sendreq(int fd, unsigned int reqtype)
 	unsigned int i;
 	uint16_t crc_h, crc;
 	/* a captured status request message with the CRC 0'd out */
-	uint8_t req[13] = { 0xeb, 0x90, 0xeb, 0x90, 0xeb, 0x90, /* sync */
+	uint8_t req[19] = { 0xaa, 0x55, 0xaa, 0x55, 0xaa, 0x55, /* pwl start up */
+			0xeb, 0x90, 0xeb, 0x90, 0xeb, 0x90, /* sync */
 			0x01, 0xa0, 0x01, /* head: address, function, length */
 			0x03,		  /* data */
 			0, 0,		  /* crc */
@@ -156,17 +157,17 @@ int sendreq(int fd, unsigned int reqtype)
 
 	/* power-switch if parameter is given */
 	if (reqtype != REQ_STATUS) {
-		req[7] = 0xaa;
-		req[9] = reqtype & REQ_PON;
+		req[13] = 0xaa;
+		req[15] = reqtype & REQ_PON;
 	}
 
-	crc_h = tracer_crc16(&(req[6]), req[8]+5);
+	crc_h = tracer_crc16(&(req[12]), req[14]+5);
 	crc = htobe16(crc_h);
 
-	req[11] = (uint8_t)(crc & (uint16_t)0x00ff);
-	req[10] = (uint8_t)(crc>>8 & (uint16_t)0x00ff);
+	req[17] = (uint8_t)(crc & (uint16_t)0x00ff);
+	req[16] = (uint8_t)(crc>>8 & (uint16_t)0x00ff);
 
-	if (write(fd, req, 13) < 13)
+	if (write(fd, req, 19) < 19)
 		return -2;
 
 	return 0;
