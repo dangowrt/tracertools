@@ -312,11 +312,11 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 
 	const char *collectd_hostname = getenv("COLLECTD_HOSTNAME");
 	if (collectd_hostname) {
-		printf("PUTVAL %s/tracer-0/voltage-battery U:%u\n", collectd_hostname, batv);
-		printf("PUTVAL %s/tracer-0/voltage-panel U:%u\n", collectd_hostname, panv);
-		printf("PUTVAL %s/tracer-0/current-mppt U:%u\n", collectd_hostname, pvc);
-		printf("PUTVAL %s/tracer-0/current-load U:%u\n", collectd_hostname, loadc);
-		printf("PUTVAL %s/tracer-0/temperature-system U:%u\n", collectd_hostname, temp);
+		printf("PUTVAL %s/tracer-0/voltage-battery U:%.2f\n", collectd_hostname, batv / 1000.0);
+		printf("PUTVAL %s/tracer-0/voltage-panel U:%.2f\n", collectd_hostname, panv / 1000.0);
+		printf("PUTVAL %s/tracer-0/current-mppt U:%.2f\n", collectd_hostname, pvc / 1000.0);
+		printf("PUTVAL %s/tracer-0/current-load U:%.2f\n", collectd_hostname, loadc / 1000.0);
+		printf("PUTVAL %s/tracer-0/temperature-system U:%d\n", collectd_hostname, temp);
 	} else if (csvout) {
 		printf("%u, %u, %u, %u, ", batv, panv, pvc, loadc);
 		printf("%u, %u, %d, ", minv, maxv, temp);
