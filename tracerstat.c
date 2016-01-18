@@ -13,6 +13,7 @@
 
 #include "tracer_crc16.h"
 #include <string.h>
+#include <endian.h> /* le16toh() */
 #include <libgen.h>
 #include <sys/param.h>
 #include <sys/select.h>
@@ -419,23 +420,24 @@ int main(int args, char *argv[]) {
 		};
 	}
 
-	do {
 	/* actually query device */
-	dev_fd = open_tracer(device);
+	do {
+		dev_fd = open_tracer(device);
 		if (dev_fd < 0) {
 			fprintf(stderr, "can't open device %s\n", device);
 			return -1;
 		}
 		res = sendreq(dev_fd, reqtype);
-		if (res) continue;
-		res = readreply(dev_fd, outfmt, !use_cache, devid);
-		if (!res) break;
-
+		if (!res) {
+			res = readreply(dev_fd, outfmt, !use_cache, devid);
+			if (!res)
+				break;
+		}
 		tcflush(dev_fd, TCIOFLUSH);
 		close(dev_fd);
 		usleep(50000);
 		tries++;
 	} while(tries < 7);
 
-	return 0;
+	return res;
 }
