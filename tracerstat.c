@@ -314,6 +314,8 @@ int readreply(int fd, int outformat, unsigned char nocache, char *devid)
 		time_t t;
 		t = time(NULL);
 		printf("PUTVAL %s/tracer/voltage-battery %lu:%.2f\n", collectd_hostname, t, batv / 1000.0);
+		printf("PUTVAL %s/tracer/voltage-lvd %lu:%.2f\n", collectd_hostname, t, minv / 1000.0);
+		printf("PUTVAL %s/tracer/voltage-full %lu:%.2f\n", collectd_hostname, t, maxv / 1000.0);
 		printf("PUTVAL %s/tracer/voltage-panel %lu:%.2f\n", collectd_hostname, t, panv / 1000.0);
 		printf("PUTVAL %s/tracer/current-mppt %lu:%.2f\n", collectd_hostname, t, pvc / 1000.0);
 		printf("PUTVAL %s/tracer/current-load %lu:%.2f\n", collectd_hostname, t, loadc / 1000.0);
