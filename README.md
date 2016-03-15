@@ -24,6 +24,15 @@ to the device and translates the result into various useful output formats.
   * `-c` comma seperated output
   * `-j` JSON output
 
+`tracerstat` automatically outputs in [collectd](http://collectd.org/)'s expected format if called
+from collectd's [Exec](https://github.com/collectd/collectd/blob/master/src/collectd.conf.in#L523) plugin.
+```
+LoadPlugin exec
+<Plugin exec>
+	Exec "daemon:uucp" "/usr/bin/tracerstat" "/dev/ttyUSB1"
+</Plugin>
+```
+
 When called with parameter `-I` or `-O`, the load output is switched according
 to the parameter.
 
